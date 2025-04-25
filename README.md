@@ -6,7 +6,7 @@ Proyek ini menggunakan `ethers.js` untuk interaksi blockchain
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) (v14 atau lebih tinggi)
+- [Node.js](https://nodejs.org/) (v20 atau lebih tinggi)
 - [npm](https://www.npmjs.com/) (sudah termasuk dengan Node.js)
 
 ## Installation
