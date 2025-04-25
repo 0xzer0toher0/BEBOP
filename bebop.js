@@ -132,19 +132,13 @@ const showBalances = async (provider, wallet) => {
     // ETH balance
     const ethBalance = await provider.getBalance(wallet.address);
     const ethFormatted = parseFloat(ethers.utils.formatEther(ethBalance)).toFixed(6);
-    console.log(chalk.blue(`ETH       -: ${ethFormatted}`));
+    console.log(chalk.blue(`ETH       : ${ethFormatted}`));
 
     // WETH balance
     const wethContract = new ethers.Contract(WETH_CONTRACT, WETH_ABI, provider);
     const wethBalance = await wethContract.balanceOf(wallet.address);
     const wethFormatted = parseFloat(ethers.utils.formatEther(wethBalance)).toFixed(6);
-    console.log(chalk.blue(`WETH       : ${wethFormatted}`));
-
-    // cUSD balance
-    const cusdContract = new ethers.Contract(CUSD_CONTRACT, ERC20_ABI, provider);
-    const cusdBalance = await cusdContract.balanceOf(wallet.address);
-    const cusdFormatted = parseFloat(ethers.utils.formatUnits(cusdBalance, 6)).toFixed(6);
-    console.log(chalk.blue(`cUSD       : ${cusdFormatted}`));
+    console.log(chalk.blue(`WETH      : ${wethFormatted}`));
   } catch (error) {
     console.log(chalk.red(`[!] Error getting balances: ${error.message}`));
   }
@@ -354,10 +348,10 @@ class Bebop {
           to,
           deadline
         );
-        gasLimit = gasLimit.mul(120).div(100);
+        // Gunakan gas limit yang diestimasi tanpa margin tambahan
       } catch (error) {
         console.warn(`${this.accountIndex} | Gas estimation failed: ${error.message}. Using default gas limit.`);
-        gasLimit = 200000;
+        gasLimit = 118264; // Gunakan nilai gas limit default yang lebih akurat
       }
 
       const tx = await this.routerContract.swapExactTokensForETH(
@@ -366,7 +360,11 @@ class Bebop {
         path,
         to,
         deadline,
-        { gasLimit }
+        {
+          gasLimit,
+          maxFeePerGas: ethers.utils.parseUnits("0.0012", "gwei"), // Max base fee
+          maxPriorityFeePerGas: ethers.utils.parseUnits("1.5", "gwei"), // Priority fee
+        }
       );
 
       const receipt = await tx.wait();
@@ -480,9 +478,10 @@ class Bebop {
     }
   }
 
-  async performSwapCycle() {
+  async performSwapCycle(roundNumber) {
     try {
-      console.log(`${this.accountIndex} | Starting swap cycle...`);
+      console.log(chalk.cyan(`\n?? Swap Round ${roundNumber}`));
+      await showBalances(this.provider, this.wallet);
 
       // Step 1: ETH to WETH
       let ethBalanceWei = await this.provider.getBalance(this.wallet.address);
@@ -491,16 +490,7 @@ class Bebop {
       let swapAmount = (ethBalance * percentage) / 100;
       swapAmount = parseFloat(swapAmount.toFixed(8));
 
-      if (swapAmount < 0.00000001) {
-        console.warn(`${this.accountIndex} | ETH swap amount too small. Using minimum amount.`);
-        swapAmount = 0.00000001;
-      }
-
-      if (ethBalance < swapAmount) {
-        console.error(`${this.accountIndex} | Insufficient ETH balance for swap.`);
-        return false;
-      }
-
+      console.log(chalk.yellow(`[?] Preparing SWAP: ETH → WETH = ${swapAmount} ETH`));
       let result = await this.swapEthToWeth(swapAmount);
       if (!result) return false;
 
@@ -508,59 +498,14 @@ class Bebop {
       let wethBalanceWei = await this.wethContract.balanceOf(this.wallet.address);
       let wethBalance = parseFloat(ethers.utils.formatEther(wethBalanceWei));
 
-      if (wethBalance <= 0) {
-        console.error(`${this.accountIndex} | No WETH balance to unwrap.`);
-        return false;
-      }
-
+      console.log(chalk.yellow(`[?] Preparing SWAP: WETH → ETH = ${wethBalance} WETH`));
       result = await this.unwrapWethToEth(wethBalance);
       if (!result) return false;
 
-      // Step 3: ETH to cUSD
-      ethBalanceWei = await this.provider.getBalance(this.wallet.address);
-      ethBalance = parseFloat(ethers.utils.formatEther(ethBalanceWei));
-      percentage = Math.random() * (config.SWAPS.BEBOP.BALANCE_PERCENTAGE_TO_SWAP[1] - config.SWAPS.BEBOP.BALANCE_PERCENTAGE_TO_SWAP[0]) + config.SWAPS.BEBOP.BALANCE_PERCENTAGE_TO_SWAP[0];
-      swapAmount = (ethBalance * percentage) / 100;
-      swapAmount = parseFloat(swapAmount.toFixed(8));
-
-      if (swapAmount < 0.00000001) {
-        console.warn(`${this.accountIndex} | ETH swap amount too small. Using minimum amount.`);
-        swapAmount = 0.00000001;
-      }
-
-      if (ethBalance < swapAmount) {
-        console.error(`${this.accountIndex} | Insufficient ETH balance for swap to cUSD.`);
-        return false;
-      }
-
-      result = await this.swapEthToCusd(swapAmount);
-      if (!result) return false;
-
-      // Step 4: cUSD to ETH
-      let cusdBalanceWei = await this.cusdContract.balanceOf(this.wallet.address);
-      let cusdBalance = parseFloat(ethers.utils.formatUnits(cusdBalanceWei, 6));
-
-      if (cusdBalance <= 0) {
-        console.error(`${this.accountIndex} | No cUSD balance to swap.`);
-        return false;
-      }
-
-      percentage = Math.random() * (config.SWAPS.BEBOP.BALANCE_PERCENTAGE_TO_SWAP[1] - config.SWAPS.BEBOP.BALANCE_PERCENTAGE_TO_SWAP[0]) + config.SWAPS.BEBOP.BALANCE_PERCENTAGE_TO_SWAP[0];
-      swapAmount = (cusdBalance * percentage) / 100;
-      swapAmount = parseFloat(swapAmount.toFixed(6));
-
-      if (swapAmount < 0.000001) {
-        console.warn(`${this.accountIndex} | cUSD swap amount too small. Using minimum amount.`);
-        swapAmount = 0.000001;
-      }
-
-      result = await this.swapCusdToEth(swapAmount);
-      if (!result) return false;
-
-      console.log(`${this.accountIndex} | Swap cycle completed successfully!`);
+      await showBalances(this.provider, this.wallet);
       return true;
     } catch (error) {
-      console.error(`${this.accountIndex} | Error in swap cycle: ${error.message}`);
+      console.error(chalk.red(`[!] Error in swap cycle: ${error.message}`));
       return false;
     }
   }
@@ -619,58 +564,33 @@ function promptMenu() {
 // Main function with menu
 async function main() {
   try {
-    // Print header
     printHeader();
-
-    // Prompt for private key
     const privateKey = await promptPrivateKey();
     if (!privateKey || !privateKey.startsWith("0x") || privateKey.length !== 66) {
-      console.error(chalk.red("Invalid private key. It should be a 64-character hex string starting with '0x'."));
+      console.error(chalk.red("[!] Invalid private key. It should be a 64-character hex string starting with '0x'."));
       return;
     }
 
     const bebop = new Bebop(privateKey, 1);
+    let roundNumber = 1;
 
-    // Main menu loop
-    while (true) {
-      // Show balances before displaying the menu
-      await showBalances(bebop.provider, bebop.wallet);
-
-      // Prompt for menu choice
-      const choice = await promptMenu();
-
-      if (choice === "1") {
-        console.log(chalk.green("Balances already displayed."));
-      } else if (choice === "2") {
-        // Prompt for looping option
-        const loop = await promptLooping();
-
-        do {
-          const result = await bebop.performSwapCycle();
-          console.log(chalk.green(`Swap cycle result: ${result}`));
-
-          if (loop) {
-            const pause = Math.floor(
-              Math.random() * (config.SETTINGS.PAUSE_BETWEEN_ATTEMPTS[1] - config.SETTINGS.PAUSE_BETWEEN_ATTEMPTS[0]) +
-              config.SETTINGS.PAUSE_BETWEEN_ATTEMPTS[0]
-            );
-            console.log(chalk.cyan(`Waiting ${pause}s before next cycle...`));
-            await new Promise((resolve) => setTimeout(resolve, pause * 1000));
-          }
-        } while (loop);
-      } else if (choice === "3") {
-        // Swap All to ETH
-        const result = await bebop.swapAllToEth();
-        console.log(chalk.green(`Swap all to ETH result: ${result}`));
-      } else if (choice === "4") {
-        console.log(chalk.cyan("Exiting Bebop Swap Bot. Goodbye!"));
-        break;
-      } else {
-        console.log(chalk.red("Invalid choice. Please enter a number between 1 and 4."));
+    const loop = await promptLooping();
+    do {
+      const result = await bebop.performSwapCycle(roundNumber);
+      
+      if (loop) {
+        roundNumber++;
+        const pause = Math.floor(
+          Math.random() * (config.SETTINGS.PAUSE_BETWEEN_ATTEMPTS[1] - config.SETTINGS.PAUSE_BETWEEN_ATTEMPTS[0]) +
+          config.SETTINGS.PAUSE_BETWEEN_ATTEMPTS[0]
+        );
+        console.log(chalk.cyan(`\n[?] Waiting ${pause}s before next round...`));
+        await new Promise((resolve) => setTimeout(resolve, pause * 1000));
       }
-    }
+    } while (loop);
+
   } catch (error) {
-    console.error(chalk.red(`Error in main: ${error.message}`));
+    console.error(chalk.red(`[!] Error in main: ${error.message}`));
   }
 }
 
