@@ -21,10 +21,10 @@ Proyek ini menggunakan `ethers.js` untuk interaksi blockchain
    npm init -y
 4. **install** 
    ```bash
-   npm install chalk@^4.1.2 dotenv@^16.5.0 ethers@^6.13.2 figlet@^1.7.0 inquirer@^8.2.6
+   npm install axios@^1.9.0 chalk@^4.1.2 dotenv@^16.5.0 ethers@^5.8.0 figlet@^1.8.1 inquirer@^8.2.6 winston@^3.17.0
 5. **RUN**
     ```bash
-   node main.js
+   node bebop.js
   
 6. **JOIN TELEGRAM**
 - [tele](https://t.me/ngadukbang) 
