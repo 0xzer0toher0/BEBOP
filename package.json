@@ -1,0 +1,20 @@
+{
+  "name": "bebop",
+  "version": "1.0.0",
+  "main": "bebop.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.5.0",
+    "ethers": "^5.8.0",
+    "figlet": "^1.8.1",
+    "inquirer": "^8.2.6",
+    "winston": "^3.17.0"
+  }
+}
